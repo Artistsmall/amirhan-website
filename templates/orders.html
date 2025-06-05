@@ -7,39 +7,46 @@
         {% for order in orders %}
         <div class="card mb-4">
             <div class="card-header">
-                <div class="row">
+                <div class="row align-items-center">
                     <div class="col">
                         <strong>Заказ #{{ order.id }}</strong>
+                        <span class="text-muted ms-2">от {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
                     </div>
-                    <div class="col text-end">
-                        {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}
+                    <div class="col-auto">
+                        <span class="badge {% if order.status == 'new' %}bg-primary
+                                       {% elif order.status == 'processing' %}bg-warning
+                                       {% elif order.status == 'completed' %}bg-success
+                                       {% else %}bg-danger{% endif %}">
+                            {% if order.status == 'new' %}Новый
+                            {% elif order.status == 'processing' %}В обработке
+                            {% elif order.status == 'completed' %}Выполнен
+                            {% else %}Отменен{% endif %}
+                        </span>
                     </div>
                 </div>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5>Товары:</h5>
-                        <ul class="list-unstyled">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th>Цена</th>
+                                <th>Количество</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                             {% for item in order.items %}
-                            <li>
-                                {{ item.product.name }} x {{ item.quantity }}
-                                <span class="float-end">{{ "%.2f"|format(item.price * item.quantity) }} ₽</span>
-                            </li>
+                            <tr>
+                                <td>{{ item.product.name }}</td>
+                                <td>{{ "%.2f"|format(item.price) }} ₽</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>{{ "%.2f"|format(item.price * item.quantity) }} ₽</td>
+                            </tr>
                             {% endfor %}
-                        </ul>
-                    </div>
-                    <div class="col-md-4">
-                        <h5>Статус заказа:</h5>
-                        <p>
-                            <span class="badge {% if order.status == 'new' %}bg-primary
-                                           {% elif order.status == 'processing' %}bg-warning
-                                           {% elif order.status == 'completed' %}bg-success
-                                           {% else %}bg-danger{% endif %}">
-                                {{ order.status }}
-                            </span>
-                        </p>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
                 <div class="border-top pt-3 mt-3">
                     <strong>Итого: {{ "%.2f"|format(order.total_amount) }} ₽</strong>
@@ -48,8 +55,10 @@
         </div>
         {% endfor %}
     {% else %}
-        <p>У вас пока нет заказов.</p>
-        <a href="{{ url_for('home') }}" class="btn btn-primary">Перейти к покупкам</a>
+        <div class="alert alert-info">
+            У вас пока нет заказов.
+            <a href="{{ url_for('home') }}" class="btn btn-primary ms-3">Перейти к покупкам</a>
+        </div>
     {% endif %}
 </div>
 {% endblock %} 

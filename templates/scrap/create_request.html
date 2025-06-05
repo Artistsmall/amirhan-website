@@ -2,66 +2,44 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row">
+    <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="mb-0">Оформление сдачи металла</h4>
+                    <h4 class="mb-0">Оформление заявки на сдачу металла</h4>
                 </div>
                 <div class="card-body">
-                    <h5>{{ metal.name }}</h5>
-                    <p>Цена за кг: {{ "%.2f"|format(metal.price_per_kg) }} ₽</p>
-                    
-                    <form method="POST" id="scrapForm" onsubmit="return validateForm()">
+                    <div class="mb-4">
+                        <h5>{{ metal.name }}</h5>
+                        <p class="text-muted">{{ metal.description }}</p>
+                        <p><strong>Цена за кг:</strong> {{ "%.2f"|format(metal.price_per_kg) }} ₽</p>
+                    </div>
+
+                    <form method="POST">
                         <div class="mb-3">
                             <label for="weight" class="form-label">Вес (кг)</label>
-                            <input type="number" step="0.1" class="form-control" id="weight" name="weight" required min="0.1">
-                            <div class="invalid-feedback">
-                                Пожалуйста, введите вес больше 0
-                            </div>
+                            <input type="number" step="0.1" min="0.1" class="form-control" id="weight" name="weight" required>
+                            <div class="form-text">Укажите примерный вес металла в килограммах.</div>
                         </div>
+
                         <div class="mb-3">
                             <label for="comment" class="form-label">Комментарий</label>
-                            <textarea class="form-control" id="comment" name="comment" rows="3"></textarea>
-                            <div class="form-text">Укажите дополнительную информацию, если необходимо.</div>
+                            <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Укажите дополнительную информацию, если необходимо"></textarea>
                         </div>
-                        <div class="mb-3">
-                            <p class="mb-1">Предварительный расчет:</p>
-                            <div id="calculation" class="alert alert-info">
-                                Итого: <span id="total">0.00</span> ₽
-                            </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            После отправки заявки наш менеджер свяжется с вами для уточнения деталей и организации приёма металла.
                         </div>
-                        <button type="submit" class="btn btn-primary">Отправить заявку</button>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Отправить заявку</button>
+                            <a href="{{ url_for('scrap_metals') }}" class="btn btn-outline-secondary">Назад к списку</a>
+                        </div>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-const validateForm = () => {
-    const weightInput = document.getElementById('weight');
-    const weight = parseFloat(weightInput.value);
-    
-    if (isNaN(weight) || weight <= 0) {
-        weightInput.classList.add('is-invalid');
-        return false;
-    }
-    
-    weightInput.classList.remove('is-invalid');
-    return true;
-};
-
-const updateTotal = () => {
-    const weight = parseFloat(document.getElementById('weight').value) || 0;
-    const pricePerKg = {{ metal.price_per_kg }};
-    const total = (weight * pricePerKg).toFixed(2);
-    document.getElementById('total').textContent = total;
-};
-
-document.getElementById('weight').addEventListener('input', updateTotal);
-</script>
 {% endblock %} 

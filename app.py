@@ -515,6 +515,197 @@ def get_scrap_request_details(request_id):
         'comment': request.comment
     })
 
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Здесь должна быть логика отправки письма для сброса пароля
+            flash('Инструкции по сбросу пароля отправлены на ваш email', 'success')
+            return redirect(url_for('login'))
+        flash('Email не найден', 'error')
+    return render_template('forgot_password.html')
+
+@app.route('/contacts')
+def contacts():
+    return render_template('contacts.html')
+
+@app.route('/scrap-metals')
+def scrap_metals():
+    metals = ScrapMetal.query.all()
+    return render_template('scrap/index.html', metals=metals)
+
+@app.route('/history')
+@login_required
+def history():
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+    return render_template('orders.html', orders=orders)
+
+@app.route('/checkout', methods=['GET', 'POST'])
+@login_required
+def checkout():
+    cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+    if not cart_items:
+        flash('Ваша корзина пуста', 'error')
+        return redirect(url_for('cart'))
+    
+    total = sum(item.product.price * item.quantity for item in cart_items)
+    
+    if request.method == 'POST':
+        try:
+            order = Order(user_id=current_user.id, total_amount=total)
+            for item in cart_items:
+                order_item = OrderItem(
+                    order=order,
+                    product_id=item.product_id,
+                    quantity=item.quantity,
+                    price=item.product.price
+                )
+                db.session.add(order_item)
+            
+            # Очищаем корзину
+            for item in cart_items:
+                db.session.delete(item)
+            
+            db.session.add(order)
+            db.session.commit()
+            
+            flash('Заказ успешно оформлен', 'success')
+            return redirect(url_for('history'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'Ошибка при оформлении заказа: {str(e)}')
+            flash('Произошла ошибка при оформлении заказа', 'error')
+            return redirect(url_for('cart'))
+    
+    return render_template('checkout.html', cart_items=cart_items, total=total)
+
+@app.route('/cart/update/<int:item_id>', methods=['POST'])
+@login_required
+def update_cart(item_id):
+    cart_item = CartItem.query.get_or_404(item_id)
+    if cart_item.user_id != current_user.id:
+        abort(403)
+    
+    quantity = int(request.form.get('quantity', 0))
+    if quantity > 0:
+        cart_item.quantity = quantity
+        db.session.commit()
+    else:
+        db.session.delete(cart_item)
+        db.session.commit()
+    
+    return redirect(url_for('cart'))
+
+@app.route('/cart/add/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    product = Product.query.get_or_404(product_id)
+    quantity = int(request.form.get('quantity', 1))
+    
+    cart_item = CartItem.query.filter_by(
+        user_id=current_user.id,
+        product_id=product_id
+    ).first()
+    
+    if cart_item:
+        cart_item.quantity += quantity
+    else:
+        cart_item = CartItem(
+            user_id=current_user.id,
+            product_id=product_id,
+            quantity=quantity
+        )
+        db.session.add(cart_item)
+    
+    try:
+        db.session.commit()
+        flash('Товар добавлен в корзину', 'success')
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f'Ошибка при добавлении в корзину: {str(e)}')
+        flash('Произошла ошибка при добавлении товара в корзину', 'error')
+    
+    return redirect(url_for('cart'))
+
+@app.route('/scrap-metal/<int:metal_id>')
+def scrap_metal_detail(metal_id):
+    metal = ScrapMetal.query.get_or_404(metal_id)
+    return render_template('scrap/detail.html', metal=metal)
+
+@app.route('/scrap-request/create/<int:metal_id>', methods=['GET', 'POST'])
+@login_required
+def create_scrap_request(metal_id):
+    metal = ScrapMetal.query.get_or_404(metal_id)
+    
+    if request.method == 'POST':
+        try:
+            weight = float(request.form.get('weight'))
+            comment = request.form.get('comment')
+            
+            scrap_request = ScrapRequest(
+                user_id=current_user.id,
+                scrap_metal_id=metal_id,
+                weight=weight,
+                comment=comment,
+                total_amount=weight * metal.price_per_kg
+            )
+            
+            db.session.add(scrap_request)
+            db.session.commit()
+            
+            flash('Заявка успешно создана', 'success')
+            return redirect(url_for('scrap_metals'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'Ошибка при создании заявки: {str(e)}')
+            flash('Произошла ошибка при создании заявки', 'error')
+    
+    return render_template('scrap/create_request.html', metal=metal)
+
+@app.route('/admin/order/<int:order_id>/status', methods=['POST'])
+@login_required
+@admin_required
+def update_order_status(order_id):
+    order = Order.query.get_or_404(order_id)
+    status = request.form.get('status')
+    
+    if status in ['new', 'processing', 'completed', 'cancelled']:
+        order.status = status
+        try:
+            db.session.commit()
+            flash('Статус заказа обновлен', 'success')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'Ошибка при обновлении статуса заказа: {str(e)}')
+            flash('Произошла ошибка при обновлении статуса', 'error')
+    else:
+        flash('Некорректный статус', 'error')
+    
+    return redirect(url_for('admin_orders'))
+
+@app.route('/admin/scrap-request/<int:request_id>/status', methods=['POST'])
+@login_required
+@admin_required
+def update_scrap_request_status(request_id):
+    scrap_request = ScrapRequest.query.get_or_404(request_id)
+    status = request.form.get('status')
+    
+    if status in ['new', 'approved', 'completed', 'rejected']:
+        scrap_request.status = status
+        try:
+            db.session.commit()
+            flash('Статус заявки обновлен', 'success')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'Ошибка при обновлении статуса заявки: {str(e)}')
+            flash('Произошла ошибка при обновлении статуса', 'error')
+    else:
+        flash('Некорректный статус', 'error')
+    
+    return redirect(url_for('admin_scrap_requests'))
+
 # Создание таблиц и инициализация базы данных
 def init_db():
     with app.app_context():

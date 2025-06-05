@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center mb-4">Каталог металлопроката</h1>
+    
+    <div class="row">
+        {% for product in products %}
+        <div class="col-md-4 mb-4">
+            <div class="card product-card h-100">
+                {% if product.image_url %}
+                <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}">
+                {% else %}
+                <img src="https://via.placeholder.com/300x200" class="card-img-top" alt="Placeholder">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.name }}</h5>
+                    <p class="card-text">{{ product.description[:100] }}...</p>
+                    <p class="card-text"><strong>Цена: {{ product.price }} ₽/тонна</strong></p>
+                    <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-primary">Подробнее</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %} 

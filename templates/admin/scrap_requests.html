@@ -28,34 +28,18 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-8">
-                        <h5>{{ request.scrap_metal.name }}</h5>
-                        <p class="mb-1">
-                            <strong>Вес:</strong> {{ "%.1f"|format(request.weight) }} кг
-                        </p>
-                        <p class="mb-1">
-                            <strong>Сумма:</strong> {{ "%.2f"|format(request.total_amount) }} ₽
-                        </p>
-                        {% if request.comment %}
-                        <p class="mb-1">
-                            <strong>Комментарий клиента:</strong> {{ request.comment }}
-                        </p>
-                        {% endif %}
+                    <div class="col-md-6">
+                        <h5>Информация о клиенте</h5>
+                        <p><strong>Email:</strong> {{ request.user.email }}</p>
                     </div>
-                    <div class="col-md-4">
-                        <h5>Информация о клиенте:</h5>
-                        <p class="mb-1">
-                            <strong>Email:</strong> {{ request.user.email }}
-                        </p>
-                        <p class="mb-1">
-                            <strong>Статус:</strong>
-                            <span class="badge {% if request.status == 'new' %}bg-primary
-                                           {% elif request.status == 'approved' %}bg-success
-                                           {% elif request.status == 'completed' %}bg-info
-                                           {% else %}bg-danger{% endif %}">
-                                {{ request.status }}
-                            </span>
-                        </p>
+                    <div class="col-md-6">
+                        <h5>Детали заявки</h5>
+                        <p><strong>Тип металла:</strong> {{ request.scrap_metal.name }}</p>
+                        <p><strong>Вес:</strong> {{ "%.1f"|format(request.weight) }} кг</p>
+                        <p><strong>Сумма:</strong> {{ "%.2f"|format(request.total_amount) }} ₽</p>
+                        {% if request.comment %}
+                        <p><strong>Комментарий:</strong> {{ request.comment }}</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -63,7 +47,7 @@
         {% endfor %}
     {% else %}
         <div class="alert alert-info">
-            Нет заявок на сдачу металла.
+            На данный момент нет заявок на сдачу металла.
         </div>
     {% endif %}
 </div>

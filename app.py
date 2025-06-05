@@ -139,7 +139,7 @@ class ScrapRequest(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 @app.route('/')
 def home():
@@ -706,79 +706,29 @@ def update_scrap_request_status(request_id):
     
     return redirect(url_for('admin_scrap_requests'))
 
-# Создание таблиц и инициализация базы данных
 def init_db():
-    with app.app_context():
-        try:
-            # Проверяем существующие таблицы
-            inspector = db.inspect(db.engine)
-            tables = inspector.get_table_names()
-            logger.info(f"Существующие таблицы: {tables}")
-            
-            # Создаем таблицы
+    """Инициализация базы данных"""
+    try:
+        # Создаем все таблицы
+        with app.app_context():
             db.create_all()
-            logger.info("Таблицы успешно созданы")
             
-            # Создаем администратора, если его нет
-            admin = User.query.filter_by(email='admin@amirhan-m.ru').first()
-            if not admin:
+            # Проверяем наличие данных
+            scrap_count = db.session.query(ScrapMetal).count()
+            product_count = db.session.query(Product).count()
+            admin_count = db.session.query(User).filter_by(is_admin=True).count()
+            
+            # Если нет администратора, создаем его
+            if admin_count == 0:
                 admin = User(
-                    username='admin',
                     email='admin@amirhan-m.ru',
+                    username='admin',
                     is_admin=True
                 )
                 admin.set_password('AmirhanM2024!')
                 db.session.add(admin)
                 db.session.commit()
                 logger.info("Создан аккаунт администратора")
-            
-            # Проверяем наличие данных в таблице Product
-            product_count = Product.query.count()
-            logger.info(f"Количество товаров в таблице Product: {product_count}")
-            
-            # Если таблица Product пуста, добавляем тестовые данные
-            if product_count == 0:
-                test_products = [
-                    {
-                        'name': 'Арматура А500С',
-                        'description': 'Арматура строительная рифленая класса А500С. Применяется для армирования железобетонных конструкций.',
-                        'price': 65000,
-                        'category': 'Арматура',
-                        'image_url': '/static/images/products/armatura.jpg'
-                    },
-                    {
-                        'name': 'Лист стальной горячекатаный',
-                        'description': 'Лист стальной горячекатаный, марка стали Ст3сп5, толщина 4 мм. Широко применяется в строительстве и машиностроении.',
-                        'price': 75000,
-                        'category': 'Листовой прокат',
-                        'image_url': '/static/images/products/list.jpg'
-                    },
-                    {
-                        'name': 'Труба профильная',
-                        'description': 'Труба профильная 40х40х3 мм, сталь Ст3. Используется в строительстве и производстве металлоконструкций.',
-                        'price': 85000,
-                        'category': 'Трубный прокат',
-                        'image_url': '/static/images/products/truba.jpg'
-                    },
-                    {
-                        'name': 'Уголок 50x50x5',
-                        'description': 'Уголок равнополочный 50x50x5мм, длина 6м. Широко используется в строительстве и производстве.',
-                        'price': 780.00,
-                        'category': 'Профиль',
-                        'image_url': '/static/images/products/ugolok.jpg'
-                    }
-                ]
-                
-                for product_data in test_products:
-                    product = Product(**product_data)
-                    db.session.add(product)
-                
-                db.session.commit()
-                logger.info("Тестовые товары добавлены в таблицу Product")
-            
-            # Проверяем наличие данных в таблице ScrapMetal
-            scrap_count = ScrapMetal.query.count()
-            logger.info(f"Количество записей в таблице ScrapMetal: {scrap_count}")
             
             # Если таблица ScrapMetal пуста, добавляем тестовые данные
             if scrap_count == 0:
@@ -804,13 +754,49 @@ def init_db():
                 db.session.commit()
                 logger.info("Тестовые данные добавлены в таблицу ScrapMetal")
             
-        except Exception as e:
-            logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
-            db.session.rollback()
-            raise
+            # Если таблица Product пуста, добавляем тестовые данные
+            if product_count == 0:
+                test_products = [
+                    {
+                        'name': 'Арматура А500С',
+                        'description': 'Арматура строительная рифленая класса А500С. Применяется для армирования железобетонных конструкций.',
+                        'price': 65000,
+                        'category': 'Арматура',
+                        'image_url': '/static/images/products/armatura.jpg'
+                    },
+                    {
+                        'name': 'Лист стальной горячекатаный',
+                        'description': 'Лист стальной горячекатаный, марка стали Ст3сп5, толщина 4 мм. Широко применяется в строительстве и машиностроении.',
+                        'price': 75000,
+                        'category': 'Листовой прокат',
+                        'image_url': '/static/images/products/list.jpg'
+                    },
+                    {
+                        'name': 'Труба профильная',
+                        'description': 'Труба профильная 40х40х3 мм, сталь Ст3. Используется в строительстве и производстве металлоконструкций.',
+                        'price': 85000,
+                        'category': 'Трубный прокат',
+                        'image_url': '/static/images/products/truba.jpg'
+                    }
+                ]
+                
+                for product_data in test_products:
+                    product = Product(**product_data)
+                    db.session.add(product)
+                
+                db.session.commit()
+                logger.info("Тестовые данные добавлены в таблицу Product")
+            
+            logger.info("База данных успешно инициализирована")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
+        db.session.rollback()
+        raise
 
-# Инициализация базы данных при запуске
-init_db()
+# Инициализация базы данных при запуске приложения
+with app.app_context():
+    init_db()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 50340))

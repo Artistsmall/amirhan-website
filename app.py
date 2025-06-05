@@ -142,8 +142,14 @@ def load_user(user_id):
 
 @app.route('/')
 def home():
-    products = Product.query.all()
-    return render_template('home.html', products=products)
+    try:
+        products = Product.query.all()
+        logger.info(f"Загружено {len(products)} товаров")
+        return render_template('home.html', products=products)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке списка товаров: {str(e)}")
+        flash('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.', 'error')
+        return render_template('home.html', products=[])
 
 @app.route('/about')
 def about():
@@ -521,11 +527,55 @@ def init_db():
             db.create_all()
             logger.info("Таблицы успешно созданы")
             
+            # Проверяем наличие данных в таблице Product
+            product_count = Product.query.count()
+            logger.info(f"Количество товаров в таблице Product: {product_count}")
+            
+            # Если таблица Product пуста, добавляем тестовые данные
+            if product_count == 0:
+                test_products = [
+                    {
+                        'name': 'Арматура А500С',
+                        'description': 'Арматура строительная рифленая класса А500С. Применяется для армирования железобетонных конструкций.',
+                        'price': 65000,
+                        'category': 'Арматура',
+                        'image_url': '/static/images/products/armatura.jpg'
+                    },
+                    {
+                        'name': 'Лист стальной горячекатаный',
+                        'description': 'Лист стальной горячекатаный, марка стали Ст3сп5, толщина 4 мм. Широко применяется в строительстве и машиностроении.',
+                        'price': 75000,
+                        'category': 'Листовой прокат',
+                        'image_url': '/static/images/products/list.jpg'
+                    },
+                    {
+                        'name': 'Труба профильная',
+                        'description': 'Труба профильная 40х40х3 мм, сталь Ст3. Используется в строительстве и производстве металлоконструкций.',
+                        'price': 85000,
+                        'category': 'Трубный прокат',
+                        'image_url': '/static/images/products/truba.jpg'
+                    },
+                    {
+                        'name': 'Уголок 50x50x5',
+                        'description': 'Уголок равнополочный 50x50x5мм, длина 6м. Широко используется в строительстве и производстве.',
+                        'price': 780.00,
+                        'category': 'Профиль',
+                        'image_url': '/static/images/products/ugolok.jpg'
+                    }
+                ]
+                
+                for product_data in test_products:
+                    product = Product(**product_data)
+                    db.session.add(product)
+                
+                db.session.commit()
+                logger.info("Тестовые товары добавлены в таблицу Product")
+            
             # Проверяем наличие данных в таблице ScrapMetal
             scrap_count = ScrapMetal.query.count()
             logger.info(f"Количество записей в таблице ScrapMetal: {scrap_count}")
             
-            # Если таблица пуста, добавляем тестовые данные
+            # Если таблица ScrapMetal пуста, добавляем тестовые данные
             if scrap_count == 0:
                 test_metals = [
                     {
@@ -558,10 +608,5 @@ def init_db():
 init_db()
 
 if __name__ == '__main__':
-    with app.app_context():
-        try:
-            db.create_all()
-            app.logger.info('База данных успешно инициализирована')
-        except Exception as e:
-            app.logger.error(f'Ошибка при инициализации базы данных: {str(e)}')
-    app.run(debug=True) 
+    port = int(os.environ.get('PORT', 50340))
+    app.run(host='0.0.0.0', port=port, debug=True) 

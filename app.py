@@ -72,7 +72,7 @@ login_manager.login_view = 'login'
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
@@ -293,7 +293,8 @@ def admin_required(f):
 @admin_required
 def admin_orders():
     orders = Order.query.order_by(Order.created_at.desc()).all()
-    return render_template('admin/orders.html', orders=orders)
+    scrap_requests = ScrapRequest.query.order_by(ScrapRequest.created_at.desc()).all()
+    return render_template('admin/orders.html', orders=orders, scrap_requests=scrap_requests)
 
 @app.route('/admin/order/<int:order_id>/status', methods=['POST'])
 @login_required
@@ -485,49 +486,58 @@ def update_scrap_request_status(request_id):
 @app.route('/api/order/<int:order_id>')
 @login_required
 def get_order_details(order_id):
-    order = Order.query.get_or_404(order_id)
-    if order.user_id != current_user.id and not current_user.is_admin:
-        abort(403)
-    
-    items = []
-    total_sum = 0
-    for item in order.items:
-        item_total = item.price * item.quantity
-        total_sum += item_total
-        items.append({
-            'name': Product.query.get(item.product_id).name,
-            'quantity': item.quantity,
-            'price': item.price,
-            'total': item_total
+    try:
+        order = Order.query.get_or_404(order_id)
+        
+        # Проверяем, принадлежит ли заказ текущему пользователю или является ли он администратором
+        if order.user_id != current_user.id and not current_user.is_admin:
+            abort(403)
+        
+        items = []
+        for item in order.items:
+            items.append({
+                'name': item.product.name,
+                'quantity': item.quantity,
+                'price': item.price,
+                'total': item.price * item.quantity
+            })
+        
+        return jsonify({
+            'id': order.id,
+            'created_at': order.created_at.strftime('%d.%m.%Y %H:%M'),
+            'status': order.status,
+            'items': items,
+            'total_amount': order.total_amount
         })
-    
-    return jsonify({
-        'id': order.id,
-        'date': order.created_at.strftime('%d.%m.%Y %H:%M'),
-        'status': order.status,
-        'items': items,
-        'total_sum': total_sum
-    })
+    except Exception as e:
+        logger.error(f"Ошибка при получении деталей заказа {order_id}: {str(e)}")
+        return jsonify({'error': 'Произошла ошибка при загрузке данных'}), 500
 
 @app.route('/api/scrap-request/<int:request_id>')
 @login_required
 def get_scrap_request_details(request_id):
-    request = ScrapRequest.query.get_or_404(request_id)
-    if request.user_id != current_user.id and not current_user.is_admin:
-        abort(403)
-    
-    return jsonify({
-        'id': request.id,
-        'status': request.status,
-        'created_at': request.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-        'weight': request.weight,
-        'total_amount': request.total_amount,
-        'comment': request.comment,
-        'metal': {
-            'name': request.scrap_metal.name,
-            'price_per_kg': request.scrap_metal.price_per_kg
-        }
-    })
+    try:
+        scrap_request = ScrapRequest.query.get_or_404(request_id)
+        
+        # Проверяем, принадлежит ли заявка текущему пользователю или является ли он администратором
+        if scrap_request.user_id != current_user.id and not current_user.is_admin:
+            abort(403)
+        
+        return jsonify({
+            'id': scrap_request.id,
+            'created_at': scrap_request.created_at.strftime('%d.%m.%Y %H:%M'),
+            'status': scrap_request.status,
+            'weight': scrap_request.weight,
+            'total_amount': scrap_request.total_amount,
+            'comment': scrap_request.comment,
+            'metal': {
+                'name': scrap_request.scrap_metal.name,
+                'price_per_kg': scrap_request.scrap_metal.price_per_kg
+            }
+        })
+    except Exception as e:
+        logger.error(f"Ошибка при получении деталей заявки {request_id}: {str(e)}")
+        return jsonify({'error': 'Произошла ошибка при загрузке данных'}), 500
 
 def init_db():
     """Инициализация базы данных"""
@@ -567,6 +577,18 @@ def init_db():
                         'description': 'Медный лом категории А',
                         'price_per_kg': 520.00,
                         'category': 'Цветной металл'
+                    },
+                    {
+                        'name': 'Алюминий',
+                        'description': 'Алюминиевый лом',
+                        'price_per_kg': 120.00,
+                        'category': 'Цветной металл'
+                    },
+                    {
+                        'name': 'Черный металлолом 5А',
+                        'description': 'Негабаритный стальной лом',
+                        'price_per_kg': 22.50,
+                        'category': 'Черный металл'
                     }
                 ]
                 
@@ -609,6 +631,61 @@ def init_db():
                 
                 db.session.commit()
                 logger.info("Тестовые данные добавлены в таблицу Product")
+
+            # Создаем тестового пользователя, если его нет
+            test_user = User.query.filter_by(email='test@test.com').first()
+            if not test_user:
+                test_user = User(
+                    email='test@test.com',
+                    username='test_user'
+                )
+                test_user.set_password('test123')
+                db.session.add(test_user)
+                db.session.commit()
+                logger.info("Создан тестовый пользователь")
+
+            # Добавляем тестовые заявки на сдачу металла
+            if db.session.query(ScrapRequest).count() == 0:
+                metals = ScrapMetal.query.all()
+                test_user = User.query.filter_by(email='test@test.com').first()
+                
+                if test_user and metals:
+                    test_requests = [
+                        {
+                            'user_id': test_user.id,
+                            'scrap_metal_id': metals[0].id,  # Черный металлолом 3А
+                            'weight': 1000.0,
+                            'total_amount': 1000.0 * metals[0].price_per_kg,
+                            'status': 'completed',
+                            'comment': 'Тестовая заявка на сдачу черного металла',
+                            'created_at': datetime.utcnow() - timedelta(days=5)
+                        },
+                        {
+                            'user_id': test_user.id,
+                            'scrap_metal_id': metals[1].id,  # Медь
+                            'weight': 50.0,
+                            'total_amount': 50.0 * metals[1].price_per_kg,
+                            'status': 'approved',
+                            'comment': 'Тестовая заявка на сдачу меди',
+                            'created_at': datetime.utcnow() - timedelta(days=2)
+                        },
+                        {
+                            'user_id': test_user.id,
+                            'scrap_metal_id': metals[2].id,  # Алюминий
+                            'weight': 100.0,
+                            'total_amount': 100.0 * metals[2].price_per_kg,
+                            'status': 'new',
+                            'comment': 'Тестовая заявка на сдачу алюминия',
+                            'created_at': datetime.utcnow() - timedelta(days=1)
+                        }
+                    ]
+                    
+                    for request_data in test_requests:
+                        scrap_request = ScrapRequest(**request_data)
+                        db.session.add(scrap_request)
+                    
+                    db.session.commit()
+                    logger.info("Добавлены тестовые заявки на сдачу металла")
             
             logger.info("База данных успешно инициализирована")
             

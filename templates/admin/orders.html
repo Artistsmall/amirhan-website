@@ -2,64 +2,196 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Управление заказами</h2>
-    {% if orders %}
-        {% for order in orders %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <strong>Заказ #{{ order.id }}</strong>
-                        <span class="text-muted ms-2">от {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+    <h2 class="mb-4">Панель управления</h2>
+
+    <!-- Вкладки -->
+    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active custom-tab-orders" id="orders-tab" data-bs-toggle="tab" href="#orders" role="tab">
+                <i class="fas fa-shopping-cart me-2"></i>Заказы
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link custom-tab-scrap" id="scrap-tab" data-bs-toggle="tab" href="#scrap" role="tab">
+                <i class="fas fa-recycle me-2"></i>Заявки на металл
+            </a>
+        </li>
+    </ul>
+
+    <!-- Стили для вкладок -->
+    <style>
+        .custom-tab-orders {
+            color: #2c3e50 !important;
+            font-weight: 500;
+        }
+        
+        .custom-tab-orders.active {
+            color: #e74c3c !important;
+            border-bottom: 3px solid #e74c3c !important;
+        }
+        
+        .custom-tab-scrap {
+            color: #2c3e50 !important;
+            font-weight: 500;
+        }
+        
+        .custom-tab-scrap.active {
+            color: #27ae60 !important;
+            border-bottom: 3px solid #27ae60 !important;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 10px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border-color: rgba(0,0,0,0.1);
+        }
+        
+        .badge {
+            font-weight: 500;
+            padding: 6px 12px;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+    </style>
+
+    <!-- Содержимое вкладок -->
+    <div class="tab-content" id="adminTabContent">
+        <!-- Вкладка с заказами -->
+        <div class="tab-pane fade show active" id="orders" role="tabpanel">
+            {% if orders %}
+                {% for order in orders %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <strong>Заказ #{{ order.id }}</strong>
+                                <span class="text-muted ms-2">от {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                            </div>
+                            <div class="col-auto">
+                                <form action="{{ url_for('update_order_status', order_id=order.id) }}" method="post" class="d-flex align-items-center">
+                                    <select name="status" class="form-select form-select-sm me-2" style="width: auto;">
+                                        <option value="new" {% if order.status == 'new' %}selected{% endif %}>Новый</option>
+                                        <option value="processing" {% if order.status == 'processing' %}selected{% endif %}>В обработке</option>
+                                        <option value="completed" {% if order.status == 'completed' %}selected{% endif %}>Выполнен</option>
+                                        <option value="cancelled" {% if order.status == 'cancelled' %}selected{% endif %}>Отменен</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Обновить статус</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-auto">
-                        <form action="{{ url_for('update_order_status', order_id=order.id) }}" method="post" class="d-flex align-items-center">
-                            <select name="status" class="form-select form-select-sm me-2" style="width: auto;">
-                                <option value="new" {% if order.status == 'new' %}selected{% endif %}>Новый</option>
-                                <option value="processing" {% if order.status == 'processing' %}selected{% endif %}>В обработке</option>
-                                <option value="completed" {% if order.status == 'completed' %}selected{% endif %}>Выполнен</option>
-                                <option value="cancelled" {% if order.status == 'cancelled' %}selected{% endif %}>Отменен</option>
-                            </select>
-                            <button type="submit" class="btn btn-primary btn-sm">Обновить статус</button>
-                        </form>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5>Товары:</h5>
+                                <ul class="list-unstyled">
+                                    {% for item in order.items %}
+                                    <li>
+                                        {{ item.product.name }} x {{ item.quantity }}
+                                        <span class="float-end">{{ "%.2f"|format(item.price * item.quantity) }} ₽</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="col-md-4">
+                                <h5>Информация о заказе:</h5>
+                                <p><strong>Клиент:</strong><br>{{ order.user.email }}</p>
+                                <p>
+                                    <strong>Статус:</strong><br>
+                                    <span class="badge {% if order.status == 'new' %}bg-primary
+                                                   {% elif order.status == 'processing' %}bg-warning
+                                                   {% elif order.status == 'completed' %}bg-success
+                                                   {% else %}bg-danger{% endif %}">
+                                        {{ order.status }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="border-top pt-3 mt-3">
+                            <strong>Итого: {{ "%.2f"|format(order.total_amount) }} ₽</strong>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5>Товары:</h5>
-                        <ul class="list-unstyled">
-                            {% for item in order.items %}
-                            <li>
-                                {{ item.product.name }} x {{ item.quantity }}
-                                <span class="float-end">{{ "%.2f"|format(item.price * item.quantity) }} ₽</span>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    <div class="col-md-4">
-                        <h5>Информация о заказе:</h5>
-                        <p><strong>Клиент:</strong><br>{{ order.user.email }}</p>
-                        <p>
-                            <strong>Статус:</strong><br>
-                            <span class="badge {% if order.status == 'new' %}bg-primary
-                                           {% elif order.status == 'processing' %}bg-warning
-                                           {% elif order.status == 'completed' %}bg-success
-                                           {% else %}bg-danger{% endif %}">
-                                {{ order.status }}
-                            </span>
-                        </p>
-                    </div>
-                </div>
-                <div class="border-top pt-3 mt-3">
-                    <strong>Итого: {{ "%.2f"|format(order.total_amount) }} ₽</strong>
-                </div>
-            </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">Нет заказов для отображения.</div>
+            {% endif %}
         </div>
-        {% endfor %}
-    {% else %}
-        <p>Нет заказов для отображения.</p>
-    {% endif %}
+
+        <!-- Вкладка с заявками на металл -->
+        <div class="tab-pane fade" id="scrap" role="tabpanel">
+            {% if scrap_requests %}
+                {% for request in scrap_requests %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <strong>Заявка #{{ request.id }}</strong>
+                                <span class="text-muted ms-2">от {{ request.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                            </div>
+                            <div class="col-auto">
+                                <form action="{{ url_for('update_scrap_request_status', request_id=request.id) }}" method="post" class="d-flex align-items-center">
+                                    <select name="status" class="form-select form-select-sm me-2" style="width: auto;">
+                                        <option value="new" {% if request.status == 'new' %}selected{% endif %}>Новая</option>
+                                        <option value="approved" {% if request.status == 'approved' %}selected{% endif %}>Одобрена</option>
+                                        <option value="completed" {% if request.status == 'completed' %}selected{% endif %}>Выполнена</option>
+                                        <option value="rejected" {% if request.status == 'rejected' %}selected{% endif %}>Отклонена</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Обновить статус</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Информация о клиенте</h5>
+                                <p><strong>Email:</strong> {{ request.user.email }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Детали заявки</h5>
+                                <p><strong>Тип металла:</strong> {{ request.scrap_metal.name }}</p>
+                                <p><strong>Вес:</strong> {{ "%.1f"|format(request.weight) }} кг</p>
+                                <p><strong>Сумма:</strong> {{ "%.2f"|format(request.total_amount) }} ₽</p>
+                                <p>
+                                    <strong>Статус:</strong>
+                                    <span class="badge {% if request.status == 'new' %}bg-primary
+                                                   {% elif request.status == 'approved' %}bg-warning
+                                                   {% elif request.status == 'completed' %}bg-success
+                                                   {% elif request.status == 'rejected' %}bg-danger{% endif %}">
+                                        {{ request.status }}
+                                    </span>
+                                </p>
+                                {% if request.comment %}
+                                <p><strong>Комментарий:</strong> {{ request.comment }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">Нет заявок на сдачу металла.</div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %} 

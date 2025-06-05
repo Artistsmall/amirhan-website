@@ -9,16 +9,55 @@
     <!-- Вкладки -->
     <ul class="nav nav-tabs mb-4" id="historyTabs" role="tablist">
         <li class="nav-item">
-            <a class="nav-link active" id="orders-tab" data-toggle="tab" href="#orders" role="tab">
-                Покупки
+            <a class="nav-link active custom-tab-orders" id="orders-tab" data-bs-toggle="tab" href="#orders" role="tab">
+                <i class="fas fa-shopping-cart me-2"></i>Покупки
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link" id="scrap-tab" data-toggle="tab" href="#scrap" role="tab">
-                Сдача металла
+            <a class="nav-link custom-tab-scrap" id="scrap-tab" data-bs-toggle="tab" href="#scrap" role="tab">
+                <i class="fas fa-recycle me-2"></i>Сдача металла
             </a>
         </li>
     </ul>
+
+    <!-- Добавляем стили для вкладок -->
+    <style>
+        .custom-tab-orders {
+            color: #2c3e50 !important;
+            font-weight: 500;
+        }
+        
+        .custom-tab-orders.active {
+            color: #e74c3c !important;
+            border-bottom: 3px solid #e74c3c !important;
+        }
+        
+        .custom-tab-scrap {
+            color: #2c3e50 !important;
+            font-weight: 500;
+        }
+        
+        .custom-tab-scrap.active {
+            color: #27ae60 !important;
+            border-bottom: 3px solid #27ae60 !important;
+        }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 10px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border-color: rgba(0,0,0,0.1);
+        }
+        
+        .badge {
+            font-weight: 500;
+            padding: 6px 12px;
+        }
+    </style>
 
     <!-- Содержимое вкладок -->
     <div class="tab-content" id="historyTabContent">
@@ -40,13 +79,19 @@
                             {% for order in orders %}
                             <tr>
                                 <td>{{ order.id }}</td>
-                                <td>{{ order.date_ordered.strftime('%d.%m.%Y %H:%M') }}</td>
+                                <td>{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                                 <td>
-                                    <span class="badge badge-{{ order.status_color }}">
-                                        {{ order.status_display }}
-                                    </span>
+                                    {% if order.status == 'new' %}
+                                        <span class="badge bg-primary">Новый</span>
+                                    {% elif order.status == 'processing' %}
+                                        <span class="badge bg-warning">В обработке</span>
+                                    {% elif order.status == 'completed' %}
+                                        <span class="badge bg-success">Выполнен</span>
+                                    {% elif order.status == 'cancelled' %}
+                                        <span class="badge bg-danger">Отменен</span>
+                                    {% endif %}
                                 </td>
-                                <td>{{ "%.2f"|format(order.total_sum) }} ₽</td>
+                                <td>{{ "%.2f"|format(order.total_amount) }} ₽</td>
                                 <td>
                                     <button class="btn btn-sm btn-info" onclick="showOrderDetails({{ order.id }})">
                                         Подробнее
@@ -82,15 +127,21 @@
                             {% for request in scrap_requests %}
                             <tr>
                                 <td>{{ request.id }}</td>
-                                <td>{{ request.date_created.strftime('%d.%m.%Y %H:%M') }}</td>
-                                <td>{{ request.metal_type }}</td>
-                                <td>{{ request.weight }}</td>
+                                <td>{{ request.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                <td>{{ request.scrap_metal.name }}</td>
+                                <td>{{ "%.1f"|format(request.weight) }}</td>
                                 <td>
-                                    <span class="badge badge-{{ request.status_color }}">
-                                        {{ request.status_display }}
-                                    </span>
+                                    {% if request.status == 'new' %}
+                                        <span class="badge bg-primary">Новая</span>
+                                    {% elif request.status == 'approved' %}
+                                        <span class="badge bg-warning">Одобрена</span>
+                                    {% elif request.status == 'completed' %}
+                                        <span class="badge bg-success">Выполнена</span>
+                                    {% elif request.status == 'rejected' %}
+                                        <span class="badge bg-danger">Отклонена</span>
+                                    {% endif %}
                                 </td>
-                                <td>{{ "%.2f"|format(request.estimated_price) }} ₽</td>
+                                <td>{{ "%.2f"|format(request.total_amount) }} ₽</td>
                                 <td>
                                     <button class="btn btn-sm btn-info" onclick="showScrapDetails({{ request.id }})">
                                         Подробнее
@@ -114,9 +165,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Детали заказа</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="orderDetailsContent">
                 <!-- Содержимое будет загружено через AJAX -->
@@ -131,9 +180,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Детали заявки</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="scrapDetailsContent">
                 <!-- Содержимое будет загружено через AJAX -->
@@ -150,8 +197,8 @@ function showOrderDetails(orderId) {
     $.get(`/api/order/${orderId}`, function(data) {
         let content = `
             <h6>Заказ №${data.id}</h6>
-            <p>Дата: ${data.date}</p>
-            <p>Статус: ${data.status}</p>
+            <p>Дата: ${data.created_at}</p>
+            <p>Статус: ${getStatusDisplay(data.status, 'order')}</p>
             <hr>
             <h6>Товары:</h6>
             <ul>
@@ -159,7 +206,7 @@ function showOrderDetails(orderId) {
         data.items.forEach(item => {
             content += `<li>${item.name} - ${item.quantity} шт. x ${item.price} ₽ = ${item.total} ₽</li>`;
         });
-        content += `</ul><hr><p><strong>Итого: ${data.total_sum} ₽</strong></p>`;
+        content += `</ul><hr><p><strong>Итого: ${data.total_amount} ₽</strong></p>`;
         
         $('#orderDetailsContent').html(content);
         $('#orderDetailsModal').modal('show');
@@ -170,11 +217,12 @@ function showScrapDetails(requestId) {
     $.get(`/api/scrap-request/${requestId}`, function(data) {
         let content = `
             <h6>Заявка №${data.id}</h6>
-            <p>Дата: ${data.date}</p>
-            <p>Тип металла: ${data.metal_type}</p>
+            <p>Дата: ${data.created_at}</p>
+            <p>Тип металла: ${data.metal.name}</p>
+            <p>Цена за кг: ${data.metal.price_per_kg} ₽</p>
             <p>Вес: ${data.weight} кг</p>
-            <p>Статус: ${data.status}</p>
-            <p>Предварительная стоимость: ${data.estimated_price} ₽</p>
+            <p>Статус: ${getStatusDisplay(data.status, 'scrap')}</p>
+            <p>Сумма: ${data.total_amount} ₽</p>
             <hr>
             <p><strong>Комментарий:</strong></p>
             <p>${data.comment || 'Нет комментария'}</p>
@@ -183,6 +231,24 @@ function showScrapDetails(requestId) {
         $('#scrapDetailsContent').html(content);
         $('#scrapDetailsModal').modal('show');
     });
+}
+
+function getStatusDisplay(status, type) {
+    const statusMap = {
+        order: {
+            'new': 'Новый',
+            'processing': 'В обработке',
+            'completed': 'Выполнен',
+            'cancelled': 'Отменен'
+        },
+        scrap: {
+            'new': 'Новая',
+            'approved': 'Одобрена',
+            'completed': 'Выполнена',
+            'rejected': 'Отклонена'
+        }
+    };
+    return statusMap[type][status] || status;
 }
 </script>
 {% endblock %} 

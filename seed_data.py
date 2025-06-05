@@ -4,24 +4,36 @@ from werkzeug.security import generate_password_hash
 def seed_database():
     with app.app_context():
         # Создаем таблицы
-        db.create_all()
+        db.drop_all()  # Удаляем все таблицы
+        db.create_all()  # Создаем таблицы заново
 
         # Добавляем администратора
-        if not User.query.filter_by(email='admin@example.com').first():
-            admin = User(
-                email='admin@example.com',
-                password_hash=generate_password_hash('admin123'),
-                is_admin=True
-            )
-            db.session.add(admin)
+        admin = User(
+            username='admin',
+            email='admin@example.com',
+            password_hash=generate_password_hash('admin123'),
+            is_admin=True
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print('Администратор создан')
+        
+        # Проверяем наличие администратора
+        admin = User.query.filter_by(email='admin@example.com').first()
+        if admin:
+            print(f'Администратор найден: email={admin.email}, is_admin={admin.is_admin}')
+        else:
+            print('ОШИБКА: Администратор не найден в базе данных!')
 
         # Добавляем тестового пользователя
-        if not User.query.filter_by(email='test@test.com').first():
-            test_user = User(
-                email='test@test.com',
-                password_hash=generate_password_hash('test123')
-            )
-            db.session.add(test_user)
+        test_user = User(
+            username='test',
+            email='test@test.com',
+            password_hash=generate_password_hash('test123')
+        )
+        db.session.add(test_user)
+        db.session.commit()
+        print('Тестовый пользователь создан')
 
         # Добавляем товары
         products = [

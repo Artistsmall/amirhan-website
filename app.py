@@ -10,8 +10,17 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # В продакшене используйте безопасный ключ
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///metal_shop.db'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key')
+
+# Настройка базы данных
+if os.environ.get('DATABASE_URL'):
+    # Используем PostgreSQL на Render.com
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL').replace('postgres://', 'postgresql://')
+else:
+    # Локальная SQLite база данных
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Настройка логирования
@@ -30,7 +39,7 @@ app.logger.info('Запуск Амирхан')
 @app.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
-    app.logger.error('Ошибка сервера: %s', str(error))
+    app.logger.error(f'Ошибка сервера: {str(error)}')
     return render_template('errors/500.html'), 500
 
 @app.errorhandler(404)
@@ -58,12 +67,19 @@ login_manager.login_view = 'login'
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
     orders = db.relationship('Order', backref='user', lazy=True)
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expiration = db.Column(db.DateTime)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -144,7 +160,7 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.check_password(password):
             login_user(user)
             return redirect(url_for('home'))
         flash('Неверный email или пароль')
@@ -158,7 +174,8 @@ def register():
         if User.query.filter_by(email=email).first():
             flash('Email уже зарегистрирован')
             return redirect(url_for('register'))
-        user = User(email=email, password_hash=generate_password_hash(password))
+        user = User(email=email)
+        user.set_password(password)
         db.session.add(user)
         db.session.commit()
         return redirect(url_for('login'))
@@ -321,7 +338,7 @@ def reset_password(token):
     
     if request.method == 'POST':
         password = request.form.get('password')
-        user.password_hash = generate_password_hash(password)
+        user.set_password(password)
         user.reset_token = None
         user.reset_token_expiration = None
         db.session.commit()
@@ -332,45 +349,77 @@ def reset_password(token):
 
 @app.route('/scrap')
 def scrap_metals():
-    metals = ScrapMetal.query.all()
-    return render_template('scrap/index.html', metals=metals)
+    try:
+        metals = ScrapMetal.query.all()
+        return render_template('scrap/index.html', metals=metals)
+    except Exception as e:
+        app.logger.error(f'Ошибка при загрузке списка металлолома: {str(e)}')
+        flash('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.', 'error')
+        return redirect(url_for('home'))
 
 @app.route('/scrap/<int:metal_id>')
 def scrap_metal_detail(metal_id):
-    metal = ScrapMetal.query.get_or_404(metal_id)
-    return render_template('scrap/detail.html', metal=metal)
+    try:
+        metal = ScrapMetal.query.get_or_404(metal_id)
+        return render_template('scrap/detail.html', metal=metal)
+    except Exception as e:
+        app.logger.error(f'Ошибка при загрузке деталей металлолома: {str(e)}')
+        flash('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.', 'error')
+        return redirect(url_for('scrap_metals'))
 
 @app.route('/scrap/request/<int:metal_id>', methods=['GET', 'POST'])
 @login_required
 def create_scrap_request(metal_id):
-    metal = ScrapMetal.query.get_or_404(metal_id)
-    
-    if request.method == 'POST':
-        weight = float(request.form.get('weight'))
-        comment = request.form.get('comment')
-        total_amount = weight * metal.price_per_kg
+    try:
+        metal = ScrapMetal.query.get_or_404(metal_id)
         
-        scrap_request = ScrapRequest(
-            user_id=current_user.id,
-            scrap_metal_id=metal_id,
-            weight=weight,
-            total_amount=total_amount,
-            comment=comment
-        )
+        if request.method == 'POST':
+            try:
+                weight = float(request.form.get('weight', 0))
+                if weight <= 0:
+                    raise ValueError('Вес должен быть больше 0')
+                
+                comment = request.form.get('comment', '')
+                total_amount = weight * metal.price_per_kg
+                
+                scrap_request = ScrapRequest(
+                    user_id=current_user.id,
+                    scrap_metal_id=metal_id,
+                    weight=weight,
+                    total_amount=total_amount,
+                    comment=comment
+                )
+                
+                db.session.add(scrap_request)
+                db.session.commit()
+                
+                flash('Ваша заявка на сдачу металла принята', 'success')
+                return redirect(url_for('my_scrap_requests'))
+            except ValueError as ve:
+                flash(str(ve), 'error')
+                return render_template('scrap/create_request.html', metal=metal)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f'Ошибка при создании заявки: {str(e)}')
+                flash('Произошла ошибка при создании заявки. Пожалуйста, попробуйте позже.', 'error')
+                return render_template('scrap/create_request.html', metal=metal)
         
-        db.session.add(scrap_request)
-        db.session.commit()
-        
-        flash('Ваша заявка на сдачу металла принята')
-        return redirect(url_for('my_scrap_requests'))
-    
-    return render_template('scrap/create_request.html', metal=metal)
+        return render_template('scrap/create_request.html', metal=metal)
+    except Exception as e:
+        app.logger.error(f'Ошибка при загрузке формы заявки: {str(e)}')
+        flash('Произошла ошибка при загрузке формы. Пожалуйста, попробуйте позже.', 'error')
+        return redirect(url_for('scrap_metals'))
 
-@app.route('/scrap/my-requests')
+@app.route('/my_scrap_requests')
 @login_required
 def my_scrap_requests():
-    requests = ScrapRequest.query.filter_by(user_id=current_user.id).order_by(ScrapRequest.created_at.desc()).all()
-    return render_template('scrap/my_requests.html', requests=requests)
+    try:
+        requests = ScrapRequest.query.filter_by(user_id=current_user.id).order_by(ScrapRequest.created_at.desc()).all()
+        return render_template('scrap/my_requests.html', requests=requests)
+    except Exception as e:
+        app.logger.error(f'Ошибка при загрузке заявок: {str(e)}')
+        flash('Произошла ошибка при загрузке заявок. Пожалуйста, попробуйте позже.', 'error')
+        return redirect(url_for('home'))
 
 @app.route('/admin/scrap-requests')
 @login_required
@@ -448,5 +497,9 @@ def get_scrap_request_details(request_id):
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            app.logger.info('База данных успешно инициализирована')
+        except Exception as e:
+            app.logger.error(f'Ошибка при инициализации базы данных: {str(e)}')
     app.run(debug=True) 

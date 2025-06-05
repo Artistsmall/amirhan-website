@@ -12,15 +12,24 @@
                     <h5>{{ metal.name }}</h5>
                     <p>Цена за кг: {{ "%.2f"|format(metal.price_per_kg) }} ₽</p>
                     
-                    <form method="POST">
+                    <form method="POST" id="scrapForm" onsubmit="return validateForm()">
                         <div class="mb-3">
                             <label for="weight" class="form-label">Вес (кг)</label>
-                            <input type="number" step="0.1" class="form-control" id="weight" name="weight" required>
+                            <input type="number" step="0.1" class="form-control" id="weight" name="weight" required min="0.1">
+                            <div class="invalid-feedback">
+                                Пожалуйста, введите вес больше 0
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="comment" class="form-label">Комментарий</label>
                             <textarea class="form-control" id="comment" name="comment" rows="3"></textarea>
                             <div class="form-text">Укажите дополнительную информацию, если необходимо.</div>
+                        </div>
+                        <div class="mb-3">
+                            <p class="mb-1">Предварительный расчет:</p>
+                            <div id="calculation" class="alert alert-info">
+                                Итого: <span id="total">0.00</span> ₽
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary">Отправить заявку</button>
                     </form>
@@ -29,4 +38,30 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const validateForm = () => {
+    const weightInput = document.getElementById('weight');
+    const weight = parseFloat(weightInput.value);
+    
+    if (isNaN(weight) || weight <= 0) {
+        weightInput.classList.add('is-invalid');
+        return false;
+    }
+    
+    weightInput.classList.remove('is-invalid');
+    return true;
+};
+
+const updateTotal = () => {
+    const weight = parseFloat(document.getElementById('weight').value) || 0;
+    const pricePerKg = {{ metal.price_per_kg }};
+    const total = (weight * pricePerKg).toFixed(2);
+    document.getElementById('total').textContent = total;
+};
+
+document.getElementById('weight').addEventListener('input', updateTotal);
+</script>
 {% endblock %} 

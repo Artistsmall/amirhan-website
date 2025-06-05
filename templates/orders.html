@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>История заказов</h2>
+    {% if orders %}
+        {% for order in orders %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="row">
+                    <div class="col">
+                        <strong>Заказ #{{ order.id }}</strong>
+                    </div>
+                    <div class="col text-end">
+                        {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>Товары:</h5>
+                        <ul class="list-unstyled">
+                            {% for item in order.items %}
+                            <li>
+                                {{ item.product.name }} x {{ item.quantity }}
+                                <span class="float-end">{{ "%.2f"|format(item.price * item.quantity) }} ₽</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h5>Статус заказа:</h5>
+                        <p>
+                            <span class="badge {% if order.status == 'new' %}bg-primary
+                                           {% elif order.status == 'processing' %}bg-warning
+                                           {% elif order.status == 'completed' %}bg-success
+                                           {% else %}bg-danger{% endif %}">
+                                {{ order.status }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+                <div class="border-top pt-3 mt-3">
+                    <strong>Итого: {{ "%.2f"|format(order.total_amount) }} ₽</strong>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>У вас пока нет заказов.</p>
+        <a href="{{ url_for('home') }}" class="btn btn-primary">Перейти к покупкам</a>
+    {% endif %}
+</div>
+{% endblock %} 

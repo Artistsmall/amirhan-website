@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="bg-dark text-white text-center py-5" style="height: 300px;">
+                    <i class="fas fa-recycle fa-5x mb-3"></i>
+                    <h3>{{ metal.name }}</h3>
+                    <p class="mb-0">{{ metal.category }}</p>
+                </div>
+                <div class="card-body">
+                    <h2 class="card-title">{{ metal.name }}</h2>
+                    <p class="card-text">{{ metal.description }}</p>
+                    <p class="card-text">
+                        <strong>Категория:</strong> {{ metal.category }}
+                    </p>
+                    <p class="card-text">
+                        <strong>Цена за кг:</strong> {{ "%.2f"|format(metal.price_per_kg) }} ₽
+                    </p>
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('create_scrap_request', metal_id=metal.id) }}" class="btn btn-primary">Оформить сдачу</a>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Войдите, чтобы оформить сдачу</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

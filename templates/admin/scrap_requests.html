@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Управление заявками на сдачу металла</h2>
+    
+    {% if requests %}
+        {% for request in requests %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <strong>Заявка #{{ request.id }}</strong>
+                        <span class="text-muted ms-2">от {{ request.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                    </div>
+                    <div class="col-auto">
+                        <form action="{{ url_for('update_scrap_request_status', request_id=request.id) }}" method="post" class="d-flex align-items-center">
+                            <select name="status" class="form-select form-select-sm me-2" style="width: auto;">
+                                <option value="new" {% if request.status == 'new' %}selected{% endif %}>Новая</option>
+                                <option value="approved" {% if request.status == 'approved' %}selected{% endif %}>Одобрена</option>
+                                <option value="completed" {% if request.status == 'completed' %}selected{% endif %}>Выполнена</option>
+                                <option value="rejected" {% if request.status == 'rejected' %}selected{% endif %}>Отклонена</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary btn-sm">Обновить статус</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>{{ request.scrap_metal.name }}</h5>
+                        <p class="mb-1">
+                            <strong>Вес:</strong> {{ "%.1f"|format(request.weight) }} кг
+                        </p>
+                        <p class="mb-1">
+                            <strong>Сумма:</strong> {{ "%.2f"|format(request.total_amount) }} ₽
+                        </p>
+                        {% if request.comment %}
+                        <p class="mb-1">
+                            <strong>Комментарий клиента:</strong> {{ request.comment }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <h5>Информация о клиенте:</h5>
+                        <p class="mb-1">
+                            <strong>Email:</strong> {{ request.user.email }}
+                        </p>
+                        <p class="mb-1">
+                            <strong>Статус:</strong>
+                            <span class="badge {% if request.status == 'new' %}bg-primary
+                                           {% elif request.status == 'approved' %}bg-success
+                                           {% elif request.status == 'completed' %}bg-info
+                                           {% else %}bg-danger{% endif %}">
+                                {{ request.status }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">
+            Нет заявок на сдачу металла.
+        </div>
+    {% endif %}
+</div>
+{% endblock %} 

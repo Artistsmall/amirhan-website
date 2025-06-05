@@ -1,0 +1,452 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
+from datetime import datetime, timedelta
+import secrets
+from flask_mail import Mail, Message
+import logging
+from logging.handlers import RotatingFileHandler
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key'  # В продакшене используйте безопасный ключ
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///metal_shop.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Настройка логирования
+if not os.path.exists('logs'):
+    os.mkdir('logs')
+file_handler = RotatingFileHandler('logs/timerhan.log', maxBytes=10240, backupCount=10)
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+))
+file_handler.setLevel(logging.INFO)
+app.logger.addHandler(file_handler)
+app.logger.setLevel(logging.INFO)
+app.logger.info('Запуск Амирхан')
+
+# Обработчик ошибок
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    app.logger.error('Ошибка сервера: %s', str(error))
+    return render_template('errors/500.html'), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    app.logger.info('Страница не найдена: %s', request.url)
+    return render_template('errors/404.html'), 404
+
+# Обработчик для всех неизвестных URL
+@app.route('/<path:path>')
+def catch_all(path):
+    app.logger.info(f'Попытка доступа к несуществующему URL: {path}')
+    return render_template('errors/404.html'), 404
+
+# Конфигурация почты
+app.config['MAIL_SERVER'] = 'smtp.mail.ru'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'Radik_82m@mail.ru'  # Новый email
+app.config['MAIL_PASSWORD'] = 'your-password'  # Пароль нужно будет настроить отдельно
+
+db = SQLAlchemy(app)
+mail = Mail(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+    is_admin = db.Column(db.Boolean, default=False)
+    orders = db.relationship('Order', backref='user', lazy=True)
+    reset_token = db.Column(db.String(100), unique=True)
+    reset_token_expiration = db.Column(db.DateTime)
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    image_url = db.Column(db.String(200))
+    category = db.Column(db.String(50))
+
+class OrderItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    product = db.relationship('Product', backref='order_items')
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), default='new')  # new, processing, completed, cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    items = db.relationship('OrderItem', backref='order', lazy=True)
+    total_amount = db.Column(db.Float, nullable=False)
+
+class CartItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    product = db.relationship('Product', backref='cart_items')
+
+class ScrapMetal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price_per_kg = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(50))
+    image_url = db.Column(db.String(200))
+
+class ScrapRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    scrap_metal_id = db.Column(db.Integer, db.ForeignKey('scrap_metal.id'), nullable=False)
+    weight = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default='new')  # new, approved, completed, rejected
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    total_amount = db.Column(db.Float, nullable=False)
+    comment = db.Column(db.Text)
+    user = db.relationship('User', backref='scrap_requests')
+    scrap_metal = db.relationship('ScrapMetal', backref='requests')
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+@app.route('/')
+def home():
+    products = Product.query.all()
+    return render_template('home.html', products=products)
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/services')
+def services():
+    return render_template('services.html')
+
+@app.route('/product/<int:product_id>')
+def product_detail(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('product_detail.html', product=product)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for('home'))
+        flash('Неверный email или пароль')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        if User.query.filter_by(email=email).first():
+            flash('Email уже зарегистрирован')
+            return redirect(url_for('register'))
+        user = User(email=email, password_hash=generate_password_hash(password))
+        db.session.add(user)
+        db.session.commit()
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
+
+@app.route('/cart')
+@login_required
+def cart():
+    cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+    total = sum(item.product.price * item.quantity for item in cart_items)
+    return render_template('cart.html', cart_items=cart_items, total=total)
+
+@app.route('/add_to_cart/<int:product_id>', methods=['POST'])
+@login_required
+def add_to_cart(product_id):
+    quantity = int(request.form.get('quantity', 1))
+    cart_item = CartItem.query.filter_by(user_id=current_user.id, product_id=product_id).first()
+    
+    if cart_item:
+        cart_item.quantity += quantity
+    else:
+        cart_item = CartItem(user_id=current_user.id, product_id=product_id, quantity=quantity)
+        db.session.add(cart_item)
+    
+    db.session.commit()
+    flash('Товар добавлен в корзину')
+    return redirect(url_for('cart'))
+
+@app.route('/update_cart/<int:item_id>', methods=['POST'])
+@login_required
+def update_cart(item_id):
+    cart_item = CartItem.query.get_or_404(item_id)
+    if cart_item.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    quantity = int(request.form.get('quantity'))
+    if quantity > 0:
+        cart_item.quantity = quantity
+        db.session.commit()
+    else:
+        db.session.delete(cart_item)
+        db.session.commit()
+    
+    return redirect(url_for('cart'))
+
+@app.route('/checkout', methods=['GET', 'POST'])
+@login_required
+def checkout():
+    if request.method == 'POST':
+        cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+        if not cart_items:
+            flash('Ваша корзина пуста')
+            return redirect(url_for('cart'))
+
+        total_amount = sum(item.product.price * item.quantity for item in cart_items)
+        
+        order = Order(
+            user_id=current_user.id,
+            total_amount=total_amount
+        )
+        db.session.add(order)
+        
+        for cart_item in cart_items:
+            order_item = OrderItem(
+                order=order,
+                product_id=cart_item.product_id,
+                quantity=cart_item.quantity,
+                price=cart_item.product.price
+            )
+            db.session.add(order_item)
+            db.session.delete(cart_item)
+        
+        db.session.commit()
+        flash('Заказ успешно оформлен')
+        return redirect(url_for('order_history'))
+    
+    cart_items = CartItem.query.filter_by(user_id=current_user.id).all()
+    total = sum(item.product.price * item.quantity for item in cart_items)
+    return render_template('checkout.html', cart_items=cart_items, total=total)
+
+@app.route('/orders')
+@login_required
+def order_history():
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+    return render_template('orders.html', orders=orders)
+
+def admin_required(f):
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash('У вас нет доступа к этой странице')
+            return redirect(url_for('home'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
+
+@app.route('/admin/orders')
+@login_required
+@admin_required
+def admin_orders():
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    return render_template('admin/orders.html', orders=orders)
+
+@app.route('/admin/order/<int:order_id>/status', methods=['POST'])
+@login_required
+@admin_required
+def update_order_status(order_id):
+    order = Order.query.get_or_404(order_id)
+    new_status = request.form.get('status')
+    if new_status in ['new', 'processing', 'completed', 'cancelled']:
+        order.status = new_status
+        db.session.commit()
+        flash(f'Статус заказа #{order.id} обновлен')
+    return redirect(url_for('admin_orders'))
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            # Генерируем токен
+            token = secrets.token_urlsafe(32)
+            user.reset_token = token
+            user.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+            
+            # Отправляем email
+            reset_url = url_for('reset_password', token=token, _external=True)
+            msg = Message('Сброс пароля',
+                        sender='noreply@metalshop.com',
+                        recipients=[user.email])
+            msg.body = f'''Для сброса пароля перейдите по ссылке:
+{reset_url}
+
+Если вы не запрашивали сброс пароля, проигнорируйте это сообщение.
+'''
+            mail.send(msg)
+            flash('Инструкции по сбросу пароля отправлены на ваш email')
+            return redirect(url_for('login'))
+        
+        flash('Email не найден')
+        return redirect(url_for('forgot_password'))
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    
+    if not user or user.reset_token_expiration < datetime.utcnow():
+        flash('Недействительная или просроченная ссылка для сброса пароля')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        user.password_hash = generate_password_hash(password)
+        user.reset_token = None
+        user.reset_token_expiration = None
+        db.session.commit()
+        flash('Ваш пароль был успешно изменен')
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html')
+
+@app.route('/scrap')
+def scrap_metals():
+    metals = ScrapMetal.query.all()
+    return render_template('scrap/index.html', metals=metals)
+
+@app.route('/scrap/<int:metal_id>')
+def scrap_metal_detail(metal_id):
+    metal = ScrapMetal.query.get_or_404(metal_id)
+    return render_template('scrap/detail.html', metal=metal)
+
+@app.route('/scrap/request/<int:metal_id>', methods=['GET', 'POST'])
+@login_required
+def create_scrap_request(metal_id):
+    metal = ScrapMetal.query.get_or_404(metal_id)
+    
+    if request.method == 'POST':
+        weight = float(request.form.get('weight'))
+        comment = request.form.get('comment')
+        total_amount = weight * metal.price_per_kg
+        
+        scrap_request = ScrapRequest(
+            user_id=current_user.id,
+            scrap_metal_id=metal_id,
+            weight=weight,
+            total_amount=total_amount,
+            comment=comment
+        )
+        
+        db.session.add(scrap_request)
+        db.session.commit()
+        
+        flash('Ваша заявка на сдачу металла принята')
+        return redirect(url_for('my_scrap_requests'))
+    
+    return render_template('scrap/create_request.html', metal=metal)
+
+@app.route('/scrap/my-requests')
+@login_required
+def my_scrap_requests():
+    requests = ScrapRequest.query.filter_by(user_id=current_user.id).order_by(ScrapRequest.created_at.desc()).all()
+    return render_template('scrap/my_requests.html', requests=requests)
+
+@app.route('/admin/scrap-requests')
+@login_required
+@admin_required
+def admin_scrap_requests():
+    requests = ScrapRequest.query.order_by(ScrapRequest.created_at.desc()).all()
+    return render_template('admin/scrap_requests.html', requests=requests)
+
+@app.route('/admin/scrap-request/<int:request_id>/status', methods=['POST'])
+@login_required
+@admin_required
+def update_scrap_request_status(request_id):
+    scrap_request = ScrapRequest.query.get_or_404(request_id)
+    new_status = request.form.get('status')
+    if new_status in ['new', 'approved', 'completed', 'rejected']:
+        scrap_request.status = new_status
+        db.session.commit()
+        flash(f'Статус заявки #{scrap_request.id} обновлен')
+    return redirect(url_for('admin_scrap_requests'))
+
+@app.route('/history')
+@login_required
+def history():
+    # Получаем заказы пользователя
+    orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+    
+    # Получаем заявки на сдачу металла
+    scrap_requests = ScrapRequest.query.filter_by(user_id=current_user.id).order_by(ScrapRequest.created_at.desc()).all()
+    
+    return render_template('history.html', orders=orders, scrap_requests=scrap_requests)
+
+@app.route('/api/order/<int:order_id>')
+@login_required
+def get_order_details(order_id):
+    order = Order.query.get_or_404(order_id)
+    if order.user_id != current_user.id and not current_user.is_admin:
+        abort(403)
+    
+    items = []
+    total_sum = 0
+    for item in order.items:
+        item_total = item.price * item.quantity
+        total_sum += item_total
+        items.append({
+            'name': Product.query.get(item.product_id).name,
+            'quantity': item.quantity,
+            'price': item.price,
+            'total': item_total
+        })
+    
+    return jsonify({
+        'id': order.id,
+        'date': order.created_at.strftime('%d.%m.%Y %H:%M'),
+        'status': order.status,
+        'items': items,
+        'total_sum': total_sum
+    })
+
+@app.route('/api/scrap-request/<int:request_id>')
+@login_required
+def get_scrap_request_details(request_id):
+    request = ScrapRequest.query.get_or_404(request_id)
+    if request.user_id != current_user.id and not current_user.is_admin:
+        abort(403)
+    
+    return jsonify({
+        'id': request.id,
+        'date': request.created_at.strftime('%d.%m.%Y %H:%M'),
+        'metal_type': request.scrap_metal.name,
+        'weight': request.weight,
+        'status': request.status,
+        'estimated_price': request.total_amount,
+        'comment': request.comment
+    })
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True) 

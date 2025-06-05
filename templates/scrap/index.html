@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Сдача металлолома</h2>
+    <div class="row mt-4">
+        {% for metal in metals %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="bg-dark text-white text-center py-5" style="height: 200px;">
+                    <i class="fas fa-recycle fa-3x mb-3"></i>
+                    <h5>{{ metal.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ metal.name }}</h5>
+                    <p class="card-text">{{ metal.description }}</p>
+                    <p class="card-text">
+                        <strong>Цена за кг:</strong> {{ "%.2f"|format(metal.price_per_kg) }} ₽
+                    </p>
+                    <a href="{{ url_for('scrap_metal_detail', metal_id=metal.id) }}" class="btn btn-primary">Подробнее</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %} 

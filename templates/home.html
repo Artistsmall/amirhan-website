@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Каталог металлопродукции</h2>
+    <div class="row mt-4">
+        {% for product in products %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="bg-secondary text-white text-center py-5" style="height: 200px;">
+                    <i class="fas fa-cube fa-3x mb-3"></i>
+                    <h5>{{ product.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.name }}</h5>
+                    <p class="card-text">{{ product.description }}</p>
+                    <p class="card-text">
+                        <strong>Цена:</strong> {{ "%.2f"|format(product.price) }} ₽
+                    </p>
+                    {% if current_user.is_authenticated %}
+                    <form method="post" action="{{ url_for('add_to_cart', product_id=product.id) }}" class="d-flex align-items-center">
+                        <input type="number" name="quantity" value="1" min="1" class="form-control me-2" style="width: 80px;">
+                        <button type="submit" class="btn btn-primary">В корзину</button>
+                    </form>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Войдите для покупки</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %} 

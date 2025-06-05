@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Оформление заказа</h2>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Подтверждение заказа</h5>
+                    <p>Пожалуйста, проверьте состав вашего заказа и подтвердите его оформление.</p>
+                    <form method="post">
+                        <button type="submit" class="btn btn-primary">Подтвердить заказ</button>
+                        <a href="{{ url_for('cart') }}" class="btn btn-secondary">Вернуться в корзину</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Ваш заказ</h5>
+                    <ul class="list-unstyled">
+                        {% for item in cart_items %}
+                        <li class="mb-2">
+                            {{ item.product.name }} x {{ item.quantity }}
+                            <span class="float-end">{{ "%.2f"|format(item.product.price * item.quantity) }} ₽</span>
+                        </li>
+                        {% endfor %}
+                        <li class="border-top pt-2 mt-2">
+                            <strong>Итого:</strong>
+                            <strong class="float-end">{{ "%.2f"|format(total) }} ₽</strong>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

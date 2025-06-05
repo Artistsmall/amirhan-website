@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}История операций{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">История операций</h1>
+    
+    <!-- Вкладки -->
+    <ul class="nav nav-tabs mb-4" id="historyTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="orders-tab" data-toggle="tab" href="#orders" role="tab">
+                Покупки
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="scrap-tab" data-toggle="tab" href="#scrap" role="tab">
+                Сдача металла
+            </a>
+        </li>
+    </ul>
+
+    <!-- Содержимое вкладок -->
+    <div class="tab-content" id="historyTabContent">
+        <!-- Вкладка с покупками -->
+        <div class="tab-pane fade show active" id="orders" role="tabpanel">
+            {% if orders %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>№ заказа</th>
+                                <th>Дата</th>
+                                <th>Статус</th>
+                                <th>Сумма</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>{{ order.id }}</td>
+                                <td>{{ order.date_ordered.strftime('%d.%m.%Y %H:%M') }}</td>
+                                <td>
+                                    <span class="badge badge-{{ order.status_color }}">
+                                        {{ order.status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ "%.2f"|format(order.total_sum) }} ₽</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="showOrderDetails({{ order.id }})">
+                                        Подробнее
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">У вас пока нет заказов</div>
+            {% endif %}
+        </div>
+
+        <!-- Вкладка со сдачей металла -->
+        <div class="tab-pane fade" id="scrap" role="tabpanel">
+            {% if scrap_requests %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>№ заявки</th>
+                                <th>Дата</th>
+                                <th>Тип металла</th>
+                                <th>Вес (кг)</th>
+                                <th>Статус</th>
+                                <th>Сумма</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for request in scrap_requests %}
+                            <tr>
+                                <td>{{ request.id }}</td>
+                                <td>{{ request.date_created.strftime('%d.%m.%Y %H:%M') }}</td>
+                                <td>{{ request.metal_type }}</td>
+                                <td>{{ request.weight }}</td>
+                                <td>
+                                    <span class="badge badge-{{ request.status_color }}">
+                                        {{ request.status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ "%.2f"|format(request.estimated_price) }} ₽</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="showScrapDetails({{ request.id }})">
+                                        Подробнее
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">У вас пока нет заявок на сдачу металла</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для деталей заказа -->
+<div class="modal fade" id="orderDetailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали заказа</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="orderDetailsContent">
+                <!-- Содержимое будет загружено через AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для деталей сдачи металла -->
+<div class="modal fade" id="scrapDetailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали заявки</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="scrapDetailsContent">
+                <!-- Содержимое будет загружено через AJAX -->
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showOrderDetails(orderId) {
+    $.get(`/api/order/${orderId}`, function(data) {
+        let content = `
+            <h6>Заказ №${data.id}</h6>
+            <p>Дата: ${data.date}</p>
+            <p>Статус: ${data.status}</p>
+            <hr>
+            <h6>Товары:</h6>
+            <ul>
+        `;
+        data.items.forEach(item => {
+            content += `<li>${item.name} - ${item.quantity} шт. x ${item.price} ₽ = ${item.total} ₽</li>`;
+        });
+        content += `</ul><hr><p><strong>Итого: ${data.total_sum} ₽</strong></p>`;
+        
+        $('#orderDetailsContent').html(content);
+        $('#orderDetailsModal').modal('show');
+    });
+}
+
+function showScrapDetails(requestId) {
+    $.get(`/api/scrap-request/${requestId}`, function(data) {
+        let content = `
+            <h6>Заявка №${data.id}</h6>
+            <p>Дата: ${data.date}</p>
+            <p>Тип металла: ${data.metal_type}</p>
+            <p>Вес: ${data.weight} кг</p>
+            <p>Статус: ${data.status}</p>
+            <p>Предварительная стоимость: ${data.estimated_price} ₽</p>
+            <hr>
+            <p><strong>Комментарий:</strong></p>
+            <p>${data.comment || 'Нет комментария'}</p>
+        `;
+        
+        $('#scrapDetailsContent').html(content);
+        $('#scrapDetailsModal').modal('show');
+    });
+}
+</script>
+{% endblock %} 

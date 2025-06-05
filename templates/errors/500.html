@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h1 class="display-1 text-danger">500</h1>
+                    <h2 class="mb-4">Внутренняя ошибка сервера</h2>
+                    <p class="lead">Произошла непредвиденная ошибка. Мы уже работаем над её устранением.</p>
+                    <p>Пожалуйста, попробуйте:</p>
+                    <ul class="list-unstyled">
+                        <li>Обновить страницу</li>
+                        <li>Вернуться позже</li>
+                        <li>Связаться с нами по телефону: <a href="tel:+79053130000">+7 (905) 313-00-00</a></li>
+                    </ul>
+                    <a href="{{ url_for('home') }}" class="btn btn-primary mt-3">Вернуться на главную</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

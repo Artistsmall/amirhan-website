@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Мои заявки на сдачу металла</h2>
+    
+    {% if requests %}
+        {% for request in requests %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5 class="card-title">{{ request.scrap_metal.name }}</h5>
+                        <p class="mb-1">
+                            <strong>Вес:</strong> {{ "%.1f"|format(request.weight) }} кг
+                        </p>
+                        <p class="mb-1">
+                            <strong>Сумма:</strong> {{ "%.2f"|format(request.total_amount) }} ₽
+                        </p>
+                        <p class="mb-1">
+                            <strong>Дата:</strong> {{ request.created_at.strftime('%d.%m.%Y %H:%M') }}
+                        </p>
+                        {% if request.comment %}
+                        <p class="mb-1">
+                            <strong>Комментарий:</strong> {{ request.comment }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span class="badge {% if request.status == 'new' %}bg-primary
+                                       {% elif request.status == 'approved' %}bg-success
+                                       {% elif request.status == 'completed' %}bg-info
+                                       {% else %}bg-danger{% endif %}">
+                            {% if request.status == 'new' %}Новая
+                            {% elif request.status == 'approved' %}Одобрена
+                            {% elif request.status == 'completed' %}Выполнена
+                            {% else %}Отклонена{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">
+            У вас пока нет заявок на сдачу металла.
+            <a href="{{ url_for('scrap_metals') }}" class="alert-link">Оформить заявку</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %} 

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: amirhan-m
+    name: amirhan-website
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
@@ -11,11 +11,13 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: amirhan-m-db
+          name: amirhan-website-db
           property: connectionString
+      - key: FLASK_ENV
+        value: production
 
 databases:
-  - name: amirhan-m-db
-    databaseName: amirhan_m
-    user: amirhan_m
+  - name: amirhan-website-db
+    databaseName: amirhan_website
+    user: amirhan_website
     plan: free 

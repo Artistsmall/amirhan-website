@@ -62,8 +62,8 @@ def catch_all(path):
 app.config['MAIL_SERVER'] = 'smtp.mail.ru'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'Radik_82m@mail.ru'  # Новый email
-app.config['MAIL_PASSWORD'] = 'your-password'  # Пароль нужно будет настроить отдельно
+app.config['MAIL_USERNAME'] = 'Radik_82m@mail.ru'
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 
 db = SQLAlchemy(app)
 mail = Mail(app)
@@ -221,14 +221,14 @@ def add_to_cart(product_id):
     flash('Товар добавлен в корзину')
     return redirect(url_for('cart'))
 
-@app.route('/update_cart/<int:item_id>', methods=['POST'])
+@app.route('/cart/update/<int:item_id>', methods=['POST'])
 @login_required
 def update_cart(item_id):
     cart_item = CartItem.query.get_or_404(item_id)
     if cart_item.user_id != current_user.id:
-        return jsonify({'error': 'Unauthorized'}), 403
+        abort(403)
     
-    quantity = int(request.form.get('quantity'))
+    quantity = int(request.form.get('quantity', 0))
     if quantity > 0:
         cart_item.quantity = quantity
         db.session.commit()
@@ -307,7 +307,7 @@ def update_order_status(order_id):
         flash(f'Статус заказа #{order.id} обновлен')
     return redirect(url_for('admin_orders'))
 
-@app.route('/forgot_password', methods=['GET', 'POST'])
+@app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -331,12 +331,10 @@ def forgot_password():
 Если вы не запрашивали сброс пароля, проигнорируйте это сообщение.
 '''
             mail.send(msg)
-            flash('Инструкции по сбросу пароля отправлены на ваш email')
+            flash('Инструкции по сбросу пароля отправлены на ваш email', 'success')
             return redirect(url_for('login'))
         
-        flash('Email не найден')
-        return redirect(url_for('forgot_password'))
-    
+        flash('Email не найден', 'error')
     return render_template('forgot_password.html')
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
@@ -515,18 +513,6 @@ def get_scrap_request_details(request_id):
         'comment': request.comment
     })
 
-@app.route('/forgot-password', methods=['GET', 'POST'])
-def forgot_password():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        user = User.query.filter_by(email=email).first()
-        if user:
-            # Здесь должна быть логика отправки письма для сброса пароля
-            flash('Инструкции по сбросу пароля отправлены на ваш email', 'success')
-            return redirect(url_for('login'))
-        flash('Email не найден', 'error')
-    return render_template('forgot_password.html')
-
 @app.route('/contacts')
 def contacts():
     return render_template('contacts.html')
@@ -580,23 +566,6 @@ def checkout():
             return redirect(url_for('cart'))
     
     return render_template('checkout.html', cart_items=cart_items, total=total)
-
-@app.route('/cart/update/<int:item_id>', methods=['POST'])
-@login_required
-def update_cart(item_id):
-    cart_item = CartItem.query.get_or_404(item_id)
-    if cart_item.user_id != current_user.id:
-        abort(403)
-    
-    quantity = int(request.form.get('quantity', 0))
-    if quantity > 0:
-        cart_item.quantity = quantity
-        db.session.commit()
-    else:
-        db.session.delete(cart_item)
-        db.session.commit()
-    
-    return redirect(url_for('cart'))
 
 @app.route('/cart/add/<int:product_id>', methods=['POST'])
 @login_required

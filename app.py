@@ -9,6 +9,10 @@ from flask_mail import Mail, Message
 import logging
 from logging.handlers import RotatingFileHandler
 
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key')
 
@@ -351,9 +355,10 @@ def reset_password(token):
 def scrap_metals():
     try:
         metals = ScrapMetal.query.all()
+        logger.info(f"Загружено {len(metals)} видов металлолома")
         return render_template('scrap/index.html', metals=metals)
     except Exception as e:
-        app.logger.error(f'Ошибка при загрузке списка металлолома: {str(e)}')
+        logger.error(f"Ошибка при загрузке списка металлолома: {str(e)}")
         flash('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.', 'error')
         return redirect(url_for('home'))
 
@@ -361,9 +366,10 @@ def scrap_metals():
 def scrap_metal_detail(metal_id):
     try:
         metal = ScrapMetal.query.get_or_404(metal_id)
+        logger.info(f"Загружены детали металлолома ID={metal_id}: {metal.name}")
         return render_template('scrap/detail.html', metal=metal)
     except Exception as e:
-        app.logger.error(f'Ошибка при загрузке деталей металлолома: {str(e)}')
+        logger.error(f"Ошибка при загрузке деталей металлолома ID={metal_id}: {str(e)}")
         flash('Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.', 'error')
         return redirect(url_for('scrap_metals'))
 
@@ -372,6 +378,7 @@ def scrap_metal_detail(metal_id):
 def create_scrap_request(metal_id):
     try:
         metal = ScrapMetal.query.get_or_404(metal_id)
+        logger.info(f"Загружена форма заявки для металла ID={metal_id}")
         
         if request.method == 'POST':
             try:
@@ -393,20 +400,25 @@ def create_scrap_request(metal_id):
                 db.session.add(scrap_request)
                 db.session.commit()
                 
+                logger.info(f"Создана новая заявка ID={scrap_request.id} для пользователя ID={current_user.id}")
                 flash('Ваша заявка на сдачу металла принята', 'success')
                 return redirect(url_for('my_scrap_requests'))
+            
             except ValueError as ve:
+                logger.warning(f"Ошибка валидации данных: {str(ve)}")
                 flash(str(ve), 'error')
                 return render_template('scrap/create_request.html', metal=metal)
+            
             except Exception as e:
+                logger.error(f"Ошибка при создании заявки: {str(e)}")
                 db.session.rollback()
-                app.logger.error(f'Ошибка при создании заявки: {str(e)}')
                 flash('Произошла ошибка при создании заявки. Пожалуйста, попробуйте позже.', 'error')
                 return render_template('scrap/create_request.html', metal=metal)
         
         return render_template('scrap/create_request.html', metal=metal)
+    
     except Exception as e:
-        app.logger.error(f'Ошибка при загрузке формы заявки: {str(e)}')
+        logger.error(f"Ошибка при загрузке формы заявки: {str(e)}")
         flash('Произошла ошибка при загрузке формы. Пожалуйста, попробуйте позже.', 'error')
         return redirect(url_for('scrap_metals'))
 
@@ -415,9 +427,10 @@ def create_scrap_request(metal_id):
 def my_scrap_requests():
     try:
         requests = ScrapRequest.query.filter_by(user_id=current_user.id).order_by(ScrapRequest.created_at.desc()).all()
+        logger.info(f"Загружены заявки пользователя ID={current_user.id}, количество: {len(requests)}")
         return render_template('scrap/my_requests.html', requests=requests)
     except Exception as e:
-        app.logger.error(f'Ошибка при загрузке заявок: {str(e)}')
+        logger.error(f"Ошибка при загрузке заявок пользователя ID={current_user.id}: {str(e)}")
         flash('Произошла ошибка при загрузке заявок. Пожалуйста, попробуйте позже.', 'error')
         return redirect(url_for('home'))
 
@@ -494,6 +507,55 @@ def get_scrap_request_details(request_id):
         'estimated_price': request.total_amount,
         'comment': request.comment
     })
+
+# Создание таблиц и инициализация базы данных
+def init_db():
+    with app.app_context():
+        try:
+            # Проверяем существующие таблицы
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            logger.info(f"Существующие таблицы: {tables}")
+            
+            # Создаем таблицы
+            db.create_all()
+            logger.info("Таблицы успешно созданы")
+            
+            # Проверяем наличие данных в таблице ScrapMetal
+            scrap_count = ScrapMetal.query.count()
+            logger.info(f"Количество записей в таблице ScrapMetal: {scrap_count}")
+            
+            # Если таблица пуста, добавляем тестовые данные
+            if scrap_count == 0:
+                test_metals = [
+                    {
+                        'name': 'Черный металлолом 3А',
+                        'description': 'Габаритный стальной лом толщиной от 4мм',
+                        'price_per_kg': 25.50,
+                        'category': 'Черный металл'
+                    },
+                    {
+                        'name': 'Медь',
+                        'description': 'Медный лом категории А',
+                        'price_per_kg': 520.00,
+                        'category': 'Цветной металл'
+                    }
+                ]
+                
+                for metal_data in test_metals:
+                    metal = ScrapMetal(**metal_data)
+                    db.session.add(metal)
+                
+                db.session.commit()
+                logger.info("Тестовые данные добавлены в таблицу ScrapMetal")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации базы данных: {str(e)}")
+            db.session.rollback()
+            raise
+
+# Инициализация базы данных при запуске
+init_db()
 
 if __name__ == '__main__':
     with app.app_context():

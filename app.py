@@ -554,11 +554,11 @@ def init_db():
             # Если нет администратора, создаем его
             if admin_count == 0:
                 admin = User(
-                    email='admin@amirhan-m.ru',
+                    email='admin@example.com',
                     username='admin',
                     is_admin=True
                 )
-                admin.set_password('AmirhanM2024!')
+                admin.set_password('admin123')
                 db.session.add(admin)
                 db.session.commit()
                 logger.info("Создан аккаунт администратора")

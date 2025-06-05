@@ -528,6 +528,19 @@ def init_db():
             db.create_all()
             logger.info("Таблицы успешно созданы")
             
+            # Создаем администратора, если его нет
+            admin = User.query.filter_by(email='admin@amirhan-m.ru').first()
+            if not admin:
+                admin = User(
+                    username='admin',
+                    email='admin@amirhan-m.ru',
+                    is_admin=True
+                )
+                admin.set_password('AmirhanM2024!')
+                db.session.add(admin)
+                db.session.commit()
+                logger.info("Создан аккаунт администратора")
+            
             # Проверяем наличие данных в таблице Product
             product_count = Product.query.count()
             logger.info(f"Количество товаров в таблице Product: {product_count}")

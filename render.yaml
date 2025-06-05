@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: amirhan
+    name: amirhan-m
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
@@ -11,11 +11,11 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: amirhan-db
+          name: amirhan-m-db
           property: connectionString
 
 databases:
-  - name: amirhan-db
-    databaseName: amirhan
-    user: amirhan
+  - name: amirhan-m-db
+    databaseName: amirhan_m
+    user: amirhan_m
     plan: free 
